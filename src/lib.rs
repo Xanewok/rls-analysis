@@ -72,6 +72,12 @@ impl SymbolResult {
 
 pub type Span = span::Span<span::ZeroIndexed>;
 
+#[derive(Clone, Eq, PartialEq, Debug, Hash, new)]
+pub struct CrateId {
+    pub name: String,
+    pub path: PathBuf
+}
+
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash, new)]
 pub struct Id(u64);
 
@@ -124,13 +130,17 @@ impl<L: AnalysisLoader> AnalysisHost<L> {
     ) -> AResult<()> {
         self.reload_with_blacklist(path_prefix, base_dir, blacklist)?;
 
+        let shiit = analysis.prelude.as_ref().map(|x| x.crate_root.clone()).unwrap();
+        warn!("CRATE_ROOT: {} (from direct analysis)", shiit);
+        // FIXME
+
         lowering::lower(
-            vec![raw::Crate::new(analysis, SystemTime::now(), None)],
+            vec![raw::Crate::new(analysis, SystemTime::now(), PathBuf::from("GOWNO"))],
             base_dir,
             self,
-            |host, per_crate, path| {
+            |host, per_crate, id| {
                 let mut a = host.analysis.lock()?;
-                a.as_mut().unwrap().update(per_crate, path);
+                a.as_mut().unwrap().update(id, per_crate);
                 Ok(())
             },
         )
@@ -167,9 +177,9 @@ impl<L: AnalysisLoader> AnalysisHost<L> {
 
         let raw_analysis = read_analysis_incremental(&self.loader, timestamps, blacklist);
 
-        let result = lowering::lower(raw_analysis, base_dir, self, |host, per_crate, path| {
+        let result = lowering::lower(raw_analysis, base_dir, self, |host, per_crate, id| {
             let mut a = host.analysis.lock()?;
-            a.as_mut().unwrap().update(per_crate, path);
+            a.as_mut().unwrap().update(id, per_crate);
             Ok(())
         });
         result
@@ -198,14 +208,14 @@ impl<L: AnalysisLoader> AnalysisHost<L> {
             raw_analysis,
             base_dir,
             &fresh_host,
-            |host, per_crate, path| {
+            |host, per_crate, crate_id| {
                 host.analysis
                     .lock()
                     .unwrap()
                     .as_mut()
                     .unwrap()
                     .per_crate
-                    .insert(path, per_crate);
+                    .insert(crate_id, per_crate);
                 Ok(())
             },
         );

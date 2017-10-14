@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use {AnalysisLoader, Blacklist};
+use {AnalysisLoader, Blacklist, CrateId};
 use listings::{DirectoryListing, ListingKind};
 pub use data::{CratePreludeData, Def, DefKind, Import, Ref, Relation, RelationKind, SigElement,
                Signature, SpanData};
@@ -35,11 +35,22 @@ impl fmt::Display for Target {
     }
 }
 
-#[derive(Debug, new)]
+#[derive(Debug)]
 pub struct Crate {
+    pub id: CrateId,
     pub analysis: Analysis,
     pub timestamp: SystemTime,
-    pub path: Option<PathBuf>,
+}
+
+impl Crate {
+    pub fn new(analysis: Analysis, timestamp: SystemTime, path: PathBuf) -> Crate {
+        let name = analysis.prelude.as_ref().map(|x| x.crate_name.clone()).unwrap();
+        Crate {
+            id: CrateId { name, path },
+            analysis,
+            timestamp
+        }
+    }
 }
 
 pub fn read_analysis_incremental<L: AnalysisLoader>(
@@ -67,10 +78,11 @@ pub fn read_analysis_incremental<L: AnalysisLoader>(
                 }
 
                 let path = p.join(&l.name);
+                warn!("CRATE_ROOT: {} (actually a path, from file)", path.display());
                 let is_fresh = timestamps.get(&path).map_or(true, |t| time > t);
                 if is_fresh {
                     read_crate_data(&path)
-                        .map(|a| result.push(Crate::new(a, *time, Some(path))));
+                        .map(|a| result.push(Crate::new(a, *time, path)));
                 }
             }
         }

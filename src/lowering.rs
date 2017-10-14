@@ -11,7 +11,7 @@
 use analysis::{Def, Glob, PerCrateAnalysis};
 use data;
 use raw::{self, RelationKind};
-use {AResult, AnalysisHost, Id, Span, NULL};
+use {AResult, AnalysisHost, Id, CrateId, Span, NULL};
 use loader::AnalysisLoader;
 use util;
 
@@ -31,7 +31,7 @@ pub fn lower<F, L>(
     mut f: F,
 ) -> AResult<()>
 where
-    F: FnMut(&AnalysisHost<L>, PerCrateAnalysis, Option<PathBuf>) -> AResult<()>,
+    F: FnMut(&AnalysisHost<L>, PerCrateAnalysis, CrateId) -> AResult<()>,
     L: AnalysisLoader,
 {
     let rss = util::get_resident().unwrap_or(0);
@@ -40,19 +40,19 @@ where
     for c in raw_analysis {
         let t_start = Instant::now();
 
-        let (per_crate, path) = CrateReader::read_crate(analysis, c, base_dir);
+        let (per_crate, id) = CrateReader::read_crate(analysis, c, base_dir);
 
         let time = t_start.elapsed();
         info!(
-            "Lowering {:?} in {:.2}s",
-            path.as_ref().map(|p| p.display().to_string()),
+            "Lowering {} in {:.2}s",
+            id.path.display(),
             time.as_secs() as f64 + time.subsec_nanos() as f64 / 1_000_000_000.0
         );
         info!("    defs:  {}", per_crate.defs.len());
         info!("    refs:  {}", per_crate.ref_spans.len());
         info!("    globs: {}", per_crate.globs.len());
 
-        f(analysis, per_crate, path)?;
+        f(analysis, per_crate, id)?;
     }
 
     let time = t_start.elapsed();
@@ -132,7 +132,7 @@ impl CrateReader {
         project_analysis: &AnalysisHost<L>,
         krate: raw::Crate,
         base_dir: &Path,
-    ) -> (PerCrateAnalysis, Option<PathBuf>) {
+    ) -> (PerCrateAnalysis, CrateId) {
         let reader = CrateReader::from_prelude(
             krate.analysis.prelude.unwrap(),
             &mut project_analysis.master_crate_map.lock().unwrap(),
@@ -150,7 +150,7 @@ impl CrateReader {
 
         per_crate.name = reader.crate_name;
 
-        (per_crate, krate.path)
+        (per_crate, krate.id)
     }
 
     fn read_imports<L: AnalysisLoader>(

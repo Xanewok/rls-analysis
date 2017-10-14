@@ -10,15 +10,18 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use {Id, Span};
-use raw::DefKind;
+use {Id, CrateId, Span};
+use raw::{DefKind};
 
+/// This is the main database that contains all the collected symbol information,
+/// such as definitions, their mapping between spans, hierarchy and so on,
+/// organized in a per-crate fashion.
 #[derive(Debug)]
 pub struct Analysis {
     // The primary crate will have its data passed directly, not via a file, so
     // there is no path for it. Because of this key into the hashmap, this means
     // we can only pass the data for one crate directly.
-    pub per_crate: HashMap<Option<PathBuf>, PerCrateAnalysis>,
+    pub per_crate: HashMap<CrateId, PerCrateAnalysis>,
 
     pub doc_url_base: String,
     pub src_url_base: String,
@@ -108,12 +111,12 @@ impl Analysis {
     pub fn timestamps(&self) -> HashMap<PathBuf, SystemTime> {
         self.per_crate
             .iter()
-            .filter_map(|(s, pc)| s.as_ref().map(|s| (s.clone(), pc.timestamp)))
+            .map(|(id, pc)| (id.path.clone(), pc.timestamp))
             .collect()
     }
 
-    pub fn update(&mut self, per_crate: PerCrateAnalysis, path: Option<PathBuf>) {
-        self.per_crate.insert(path, per_crate);
+    pub fn update(&mut self, crate_id: CrateId, per_crate: PerCrateAnalysis) {
+        self.per_crate.insert(crate_id, per_crate);
     }
 
     pub fn has_def(&self, id: Id) -> bool {
